@@ -60,7 +60,7 @@ for f in "$files"; do
 			out=$(echo "$dangerous_keys" | grep "$hash")
 			if [ $? -eq 0 ]; then
 				(( v++ ))
-				echo "VULNERABLE: Found shared Hetzner key"
+				echo "VULNERABLE: Found shared Hetzner key in $f"
 				echo $line
 				echo matches hash of
 				echo $out
