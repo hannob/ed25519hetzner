@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+#
+# author: Hanno Böck, https://hboeck.de
+# license: CC0 / public domain
+
+read -r -d '' dangerous_keys <<- EOM
+CentOS-71-64-minimal SHA256:QTye4yVCd1Ph0+d0zWVW2g4Sw37nv3MXcxBYjIw+NL0 MD5:ad:95:9c:0a:09:14:be:23:90:c2:10:2e:83:f9:7c:93
+CentOS-72-64-minimal SHA256:R1ZEXqTwn4j1WyZ61veNZi0Xcton4RvtZcd6peW9QZk MD5:71:65:6f:e0:59:65:cb:ce:29:91:f7:39:20:b1:9c:c4
+Debian-{80,81,82}-jessie-64-{LAMP,minimal} SHA256:FhhBSaUV8T2ZqRRtSqXsmBj2ByTQt6MVuoCDtBQFmwg MD5:7f:0e:75:35:5b:fe:bd:a6:df:97:7b:fd:0f:b7:65:7b
+openSUSE-132-64-minimal SHA256:vMTjcKunUVC+59v+rVFU2OjSNVs4xvjRWqtv8Z/Uf94 MD5:49:45:60:8e:1b:f9:30:ec:52:f1:d3:ac:33:72:20:84
+openSUSE-421-64-minimal SHA256:MEXCW9SmGGupaZT6hZP49SiUB2uWoDBwdMxJjA8xtYs MD5:c5:c0:2c:a1:0c:b2:89:26:8f:de:5c:9c:90:11:fd:e3
+Ubuntu-1404-trusty-64-minimal SHA256:ZMcIFjuNGgLw09tQVUe/DoJH7yd8oDUdkPCmUH0/gEU MD5:11:ff:de:e3:46:2c:d2:42:21:dc:f6:49:e3:9c:91:59
+Ubuntu-1410-utopic-64-minimal SHA256:rMhwQfZKgpi64Oq+b/bLbftNBdQw/fxexK0liY22P2E MD5:4b:0b:84:d3:6f:de:fb:a4:85:d0:78:2e:85:e6:75:bb
+Ubuntu-1504-vivid-64-minimal SHA256:cgIM1t/Hn1XGD7Uf2a3dvU8kEF0JoIntdO/N2qgsri0 MD5:22:e5:73:08:a7:4f:e4:e6:8c:5e:aa:d1:10:35:f7:59
+Ubuntu-1510-wily-64-minimal SHA256:CI6pAvXx4nyZFTE/21aOQD4xRwn+ePXa82rlWzL0rps MD5:f8:68:b0:c6:e0:ef:22:1d:dd:1b:1f:5d:50:bd:92:c5
+EOM
+
+ssh-keygen -l -E SHA256 -f /dev/null &> /dev/null
+if [ $? -ne 255 ]; then
+	echo "OpenSSH version too old."
+	echo "(I may add support for that later.)"
+	exit 2
+fi
+
+if [ "${1:0:1}" == "-" ]; then
+	echo Usage:
+	echo -e "\t$0 [files]"
+	echo
+	echo "If script runs with user rights and no files are given the script checks"
+	echo "the user's known_hosts and if available the system's ed25519 key."
+	echo "If script runs as root it checks the root's, all user's known_hosts and"
+	echo "the system's ed25519 key."
+	exit 1
+fi
+
+if [ $# -ne "0" ]; then
+	files="$@"
+else
+	if [ "$(id -u)" -eq "0" ]; then
+		files="$(ls /root/.ssh/known_hosts /home/*/.ssh/known_hosts)"
+	else
+		files=~/.ssh/known_hosts
+	fi
+	if [ -e /etc/ssh/ssh_host_ed25519_key.pub ]; then
+		files="/etc/ssh/ssh_host_ed25519_key.pub $files"
+	fi
+fi
+
+echo Checking $files
+
+c=0
+v=0
+
+for f in "$files"; do
+	while read line; do
+		hash=$(ssh-keygen -l -f /dev/stdin 2>/dev/null <<< "$line" | sed -e 's:^[^ ]* ::g' -e 's: .*::g')
+
+		if [ -n "$hash" ]; then
+			(( c++ ))
+			out=$(echo "$dangerous_keys" | grep "$hash")
+			if [ $? -eq 0 ]; then
+				(( v++ ))
+				echo "VULNERABLE: Found shared Hetzner key"
+				echo $line
+				echo matches hash of
+				echo $out
+			fi
+		fi
+	done <<< "$(cat $f)"
+done
+echo $c keys scanned, $v keys vulnerable
