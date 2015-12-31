@@ -15,10 +15,15 @@ Ubuntu-1504-vivid-64-minimal SHA256:cgIM1t/Hn1XGD7Uf2a3dvU8kEF0JoIntdO/N2qgsri0 
 Ubuntu-1510-wily-64-minimal SHA256:CI6pAvXx4nyZFTE/21aOQD4xRwn+ePXa82rlWzL0rps MD5:f8:68:b0:c6:e0:ef:22:1d:dd:1b:1f:5d:50:bd:92:c5
 EOM
 
-ssh-keygen -l -E SHA256 -f /dev/null &> /dev/null
-if [ $? -ne 255 ]; then
-	echo "OpenSSH version too old."
-	echo "(I may add support for that later.)"
+test_key="SHA256:vZ8gqn+8HWBkiIVGnft09F+kqWBRtQM5uKdIMD6QRPQ MD5:a6:24:06:4e:4c:1a:2c:e5:68:da:de:04:06:0d:d3:be"
+
+hash_key() {
+  ssh-keygen -l -f /dev/stdin 2>/dev/null <<< "$1" | sed -e 's:^[^ ]* ::g' -e 's: .*::g'
+}
+
+if ! grep -q $(hash_key "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbgg4ChXna47ydbfrfLVnMTmnrCw/zcTc2jtpK1jc20") <<< "$test_key"; then
+	echo "Failed to detect the test key."
+	echo "Your ssh-keygen might use an unexpected output format"
 	exit 2
 fi
 
@@ -53,7 +58,7 @@ v=0
 
 for f in "$files"; do
 	while read line; do
-		hash=$(ssh-keygen -l -f /dev/stdin 2>/dev/null <<< "$line" | sed -e 's:^[^ ]* ::g' -e 's: .*::g')
+		hash=$(hash_key "$line")
 
 		if [ -n "$hash" ]; then
 			(( c++ ))
